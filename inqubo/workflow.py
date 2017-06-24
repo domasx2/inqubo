@@ -7,16 +7,19 @@ class Workflow:
 
     def __init__(self, id: str):
         self.id = id
-        self._initial_step: Step = None
+        self.initial_step: Step = None
 
     def start(self, step: StepOrFn) -> 'Step':
-        self._initial_step = Step._make(step)
-        return self._initial_step
+        self.initial_step = Step._make(step)
+        return self.initial_step
+
+    def __str__(self):
+        return self.id
 
     def serialize(self) -> t.Dict[str, t.Any]:
         return {
             'workflow_id': self.id,
-            'initial_step': self._initial_step.serialize() if self._initial_step else None
+            'initial_step': self.initial_step.serialize() if self.initial_step else None
         }
 
 
@@ -35,17 +38,16 @@ class Step:
             self.children.append(step)
         if len(steps) == 1:
             return self.children[0]
-        return None
+        return None # merge of tasks not supported yet
 
     def __str__(self):
-        return self.name
+        return 'step [{}]'.format(self.name)
 
     def serialize(self) -> t.Dict[str, t.Any]:
         return {
             'name': self.name,
             'children': [c.serialize() for c in self.children]
         }
-
 
     @classmethod
     def _make(cls, step: StepOrFn):

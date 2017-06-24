@@ -1,29 +1,42 @@
 import pprint
+import asyncio
+import logging
 from inqubo.workflow import  Workflow
 from inqubo.decorators import step
+from inqubo.runners.simple_runner import SimpleRunner
+
+logger = logging.getLogger('inqubo')
+logger.setLevel(logging.DEBUG)
+logger.addHandler(logging.StreamHandler())
 
 pp = pprint.PrettyPrinter(indent=4)
 
 @step()
-def step1():
-    pass
+async def get_data():
+    print('geting data..')
+    return ['foo1', 'foo2']
 
 @step()
-def step2():
-    pass
+def process_data(payload):
+    print('processing data: {}'.format(payload))
+    return ['processed_foo1', 'processed_foo2']
 
 @step()
-def step3():
-    pass
+async def load_data_to_external_system(payload):
+    await asyncio.sleep(10)
+    print('loaded data to external system: {}'.format(payload))
 
 @step()
-def step4():
-    pass
+def load_data_to_internal_system(payload):
+    print('loaded data to internal system: {}'.format(payload))
 
 flow = Workflow('simple')
 
-flow.start(step1)\
-    .then(step2)\
-    .then(step3, step4)
+flow.start(get_data)\
+    .then(process_data)\
+    .then(load_data_to_external_system, load_data_to_internal_system) # two tasks in parallel
 
-print(pp.pprint(flow.serialize()))
+loop = asyncio.get_event_loop()
+runner = SimpleRunner(flow, loop)
+loop.run_until_complete(runner.trigger('test run'))
+loop.close()
