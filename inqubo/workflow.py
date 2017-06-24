@@ -1,4 +1,6 @@
 import typing as t
+
+from inqubo.retry_strategies import BaseRetryStrategy
 from inqubo.typing import StepCallable
 
 StepOrFn = t.Union['Step', StepCallable]
@@ -25,10 +27,11 @@ class Workflow:
 
 class Step:
 
-    def __init__(self, fn: StepCallable, name: str=None, parent: 'Step'=None):
+    def __init__(self, fn: StepCallable, name: str=None, parent: 'Step'=None, retry_strategy: BaseRetryStrategy=None):
         self.name = name or fn.__name__
         self.fn = fn
         self.parent = parent
+        self.retry_strategy = retry_strategy
         self.children: t.List[Step] = []
 
     def then(self, *steps: t.List[StepOrFn]) -> t.Union[None, 'Step']:

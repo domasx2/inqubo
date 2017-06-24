@@ -37,6 +37,6 @@ flow.start(get_data)\
     .then(load_data_to_external_system, load_data_to_internal_system) # two tasks in parallel
 
 loop = asyncio.get_event_loop()
-runner = SimpleRunner(flow, loop)
+runner = SimpleRunner(flow, event_loop=loop)
 loop.run_until_complete(runner.trigger('test run'))
 loop.close()

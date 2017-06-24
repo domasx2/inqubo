@@ -1,23 +1,26 @@
-import typing as t
-import time
 import inspect
 import logging
-from inqubo.workflow import  Workflow, Step
-from inqubo.models import WorkflowInstance, StepResult
+import time
+import typing as t
+
+from inqubo.retry_strategies import BaseRetryStrategy, LimitedRetries
+from inqubo.runners.models import WorkflowInstance, StepResult
+from inqubo.workflow import Workflow, Step
 
 logger = logging.getLogger('inqubo')
 
 
 class BaseRunner:
 
-    def __init__(self, workflow: Workflow):
+    def __init__(self, workflow: Workflow, retry_strategy: BaseRetryStrategy=None):
         self.workflow = workflow
+        self.retry_strategy = retry_strategy or LimitedRetries()
 
     async def trigger(self, key: str, meta: t.Any=None, payload: t.Any=None):
         return await self._trigger(WorkflowInstance(id=self.workflow.id, key=key, meta=meta), payload)
 
     async def _trigger(self, workflow_instance: WorkflowInstance, payload: t.Any):
-        raise NotImplemented
+        raise NotImplementedError
 
     @staticmethod
     async def execute_step(step: Step, workflow_instance: WorkflowInstance, payload: t.Any):
