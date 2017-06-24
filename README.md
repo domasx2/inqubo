@@ -9,13 +9,11 @@ This is a automated workflow runner / manager
 Usage
 ============
 
-'''python
+```python
 import asyncio
 from inqubo.workflow import  Workflow
 from inqubo.decorators import step
 from inqubo.runners.simple_runner import SimpleRunner
-
-pp = pprint.PrettyPrinter(indent=4)
 
 @step()
 async def get_data():
@@ -46,4 +44,4 @@ loop = asyncio.get_event_loop()
 runner = SimpleRunner(flow, loop)
 loop.run_until_complete(runner.trigger('test run'))
 loop.close()
-'''
+```
