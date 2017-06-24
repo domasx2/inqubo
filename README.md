@@ -1,7 +1,9 @@
 Inqubo
 ============
 
-Inqubo means "process", "series of steps" in zulu
+Inqubo means "process", "series of steps" in zulu.
+
+This is a automated workflow runner / manager
 
 
 Usage
