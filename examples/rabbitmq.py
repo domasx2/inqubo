@@ -20,7 +20,7 @@ class RandomFailure(Exception):
 async def get_data():
     print('geting data...')
     await asyncio.sleep(random.random() * 10)
-    if random.random() > 0.1:
+    if random.random() > 0.5:
         raise RandomFailure
     return ['foo1', 'foo2']
 
@@ -61,10 +61,10 @@ async def main():
     await pika_runner.start()
     await pika_runner.trigger('test_run_{}'.format(random.randint(0, 100000)))
 
-    try:
-        while True:
-            await asyncio.sleep(100)
-    except KeyboardInterrupt:
-        print('bye')
+    while True:
+        await asyncio.sleep(100)
 
-loop.run_until_complete(main())
+try:
+    loop.run_until_complete(main())
+except KeyboardInterrupt:
+        print('bye')

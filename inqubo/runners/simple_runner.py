@@ -31,10 +31,11 @@ class SimpleRunner(BaseRunner):
         errors: t.Dict[str, Exception] = {}
 
         def run_step(step: Step, step_payload: t.Any, attempt_no:int = 0):
+            ctx = self._ctx(workflow_instance, step)
             if attempt_no:
-                logger.info('retry attempt {} for {} {}'.format(attempt_no, step, workflow_instance))
+                ctx.log.info('retry attempt {}'.format(attempt_no))
             pending[step.name] = 'running'
-            step_future = self.event_loop.create_task(self.execute_step(step, workflow_instance, step_payload))
+            step_future = self.event_loop.create_task(self.execute_step(step, workflow_instance, step_payload, ctx))
 
             def callback(step_future: asyncio.Future):
                 del pending[step.name]
@@ -43,7 +44,7 @@ class SimpleRunner(BaseRunner):
                     retry_strategy = step.retry_strategy or self.retry_strategy
                     retry_after = retry_strategy.get_retry_timeout(result.exception, attempt_no + 1)
                     if retry_after:
-                        logger.error('{} failed, retrying after {} ms'.format(step, retry_after))
+                        ctx.log.error('retrying after {} ms'.format(retry_after))
                         pending[step.name] = 'pending retry'
 
                         def retry(retry_future):
@@ -52,13 +53,13 @@ class SimpleRunner(BaseRunner):
                         retry_future = self.event_loop.create_task(asyncio.sleep(retry_after / 1000))
                         retry_future.add_done_callback(retry)
                     else:
-                        logger.error('{} failed after {} attempts, not continuing this branch'.format(step, attempt_no))
+                        ctx.log.error('failed after {} attempts, not continuing this branch'.format(attempt_no))
                         errors[step.name] = result.exception
                 else:
                     for child in step.children:
                         run_step(child, result.result)
                 if not pending:
-                    logger.info('execution of {} ended'.format(workflow_instance))
+                    ctx.log.info('workflow complete!')
                     if errors:
                         trigger_fut.set_exception(SimpleRunFailure(errors))
                     else:

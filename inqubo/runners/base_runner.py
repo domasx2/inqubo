@@ -4,6 +4,7 @@ import time
 import typing as t
 
 from inqubo.retry_strategies import BaseRetryStrategy, LimitedRetries
+from inqubo.runners.context import Context
 from inqubo.runners.models import WorkflowInstance, StepResult
 from inqubo.workflow import Workflow, Step
 
@@ -23,8 +24,12 @@ class BaseRunner:
         raise NotImplementedError
 
     @staticmethod
-    async def execute_step(step: Step, workflow_instance: WorkflowInstance, payload: t.Any):
-        logger.info('starting {} for {}'.format(step, workflow_instance))
+    def _ctx(workflow_instance: WorkflowInstance=None, step: Step=None):
+        return Context(workflow_instance, step)
+
+    @staticmethod
+    async def execute_step(step: Step, workflow_instance: WorkflowInstance, payload: t.Any, ctx: Context):
+        ctx.log.info('executing step')
         kwargs = {}
         args = inspect.getfullargspec(step.fn).args
         if 'workflow_instance' in args:
@@ -37,11 +42,11 @@ class BaseRunner:
                 result = await step.fn(**kwargs)
             else:
                 result = step.fn(**kwargs)
-            logger.info('{} for {} success'.format(step, workflow_instance))
+            ctx.log.info('success!')
             return StepResult(duration=start - time.time(), result=result)
 
         except Exception as e:
-            logger.error('{} for {} failed with {}'.format(step, workflow_instance, e))
+            ctx.log.error('failed with {}'.format(e))
             return StepResult(duration=start - time.time(), exception=e)
 
 
