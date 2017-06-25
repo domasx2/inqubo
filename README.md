@@ -4,11 +4,21 @@ Inqubo
 Inqubo means "process", "series of steps" in zulu.
 
 This is a automated workflow runner / manager.  
-The idea is define a workflow as a tree (acyclic graph in the future) consisting of atomic actions.  
-These actions are choreographed using RabbitMQ.    
+The idea is define an automated workflow as a tree (acyclic graph in the future) consisting of atomic actions.  
+These actions are choreographed using RabbitMQ, by hooking them up to queues bound to trigger events and emiting lifecycle events.    
 Multiple runners for the same workflow can be started and tasks are automatically balanced.  
 Retries are implemented using RabbitMQ dead letter exchange feature.  
 
+Why?
+===========
+The goal was to combine the best features of workflow orchestration & choreography.  
+
+* Workflows are explicitly defined using code
+* Easily scalable, work is shared between multiple active runners
+* It's just a thin layer over event choreography using RabbitMQ! Well understood pattern, easy to extend and integrate with other systems using plain amqp
+* Implicitly maximized concurrency
+* Retries configurable per-task, easy to write custom strategies
+* Simple, less than 400 LoC
 
 Usage
 ============
