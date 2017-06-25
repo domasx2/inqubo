@@ -8,5 +8,5 @@ setup(name='Inqubo',
       author='Domas Lapinskas',
       author_email='Domas Lapinskas',
       packages=['inqubo'],
-      install_requires=['pika>=0.10.0'],
+      install_requires=['aio-pika==0.12.1'],
      )

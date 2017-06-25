@@ -5,6 +5,7 @@ from inqubo.typing import StepCallable
 
 StepOrFn = t.Union['Step', StepCallable]
 
+
 class Workflow:
 
     def __init__(self, id: str):

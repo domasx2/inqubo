@@ -1,4 +1,3 @@
-import pprint
 import asyncio
 import logging
 import random
@@ -11,8 +10,6 @@ from inqubo.runners.simple_runner import SimpleRunner, SimpleRunFailure
 logger = logging.getLogger('inqubo')
 logger.setLevel(logging.DEBUG)
 logger.addHandler(logging.StreamHandler())
-
-pp = pprint.PrettyPrinter(indent=4)
 
 
 class RandomFailure(Exception):
