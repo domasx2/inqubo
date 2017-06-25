@@ -3,11 +3,11 @@ Inqubo
 
 Inqubo means "process", "series of steps" in zulu.
 
-This is a automated workflow runner / manager.
-The idea is define a workflow as a tree (acyclic graph in the future) consisting of atomic actions.
-These actions are choreographed using RabbitMQ.
-Multiple runners for the same workflow can be started and tasks are automatically balanced.
-Retries are implemented using RabbitMQ dead letter exchange feature.
+This is a automated workflow runner / manager.  
+The idea is define a workflow as a tree (acyclic graph in the future) consisting of atomic actions.  
+These actions are choreographed using RabbitMQ.    
+Multiple runners for the same workflow can be started and tasks are automatically balanced.  
+Retries are implemented using RabbitMQ dead letter exchange feature.  
 
 
 Usage
