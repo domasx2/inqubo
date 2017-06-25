@@ -40,6 +40,7 @@ class PikaRunner(BaseRunner):
         self.event_loop = event_loop or asyncio.get_event_loop()
         self.exchange = None
         self.retry_exchange = None
+        self.meta_exchange = None
         self.step_queues = {}
         self.retry_queues = {}
 
@@ -54,6 +55,17 @@ class PikaRunner(BaseRunner):
         self.retry_exchange = await self.pika_client.channel.declare_exchange(self.workflow.id + '_retry',
                                                                               type=ExchangeType.DIRECT,
                                                                               durable=True, auto_delete=False)
+        self.meta_exchange = await self.pika_client.channel.declare_exchange('inqubo_meta',
+                                                                              type=ExchangeType.DIRECT,
+                                                                              durable=True, auto_delete=False)
+
+        ctx.log.info('setting up meta')
+        def on_workflow_request(message: IncomingMessage):
+            ctx.log.info('got workflow meta request')
+            self.event_loop.create_task(self._emit_workflow_meta(ctx))
+
+        await self._setup_queue('', ctx, ['workflow_meta_request'], on_workflow_request, self.meta_exchange)
+        await self._emit_workflow_meta(ctx)
 
         async def register_step(trigger_key: str, step: Step):
             ctx = self._ctx(WorkflowInstance(self.workflow.id, '-', None), step)
@@ -73,6 +85,13 @@ class PikaRunner(BaseRunner):
         ctx = self._ctx(workflow_instance)
         ctx.log.info('triggering workflow!')
         await self._publish_message(self.workflow.id + '.init', self._build_message(ctx, payload), ctx)
+
+    async def _emit_workflow_meta(self, ctx: Context):
+        ctx.log.info('emitting workflow meta')
+        await self.meta_exchange.publish(Message(
+            bytes(json.dumps(self.workflow.serialize()), 'utf-8'),
+            content_type='application/json',
+        ), 'workflow_meta')
 
     async def _setup_queue(self, name: str, ctx: Context, routing_keys: t.List[str]=[],
                            on_message: t.Callable[[IncomingMessage], None]=None,
@@ -148,6 +167,7 @@ class PikaRunner(BaseRunner):
                                              meta = body['meta'])
         ctx = self._ctx(workflow_instance, step)
         payload = body['payload']
+        await self._publish_message(step.name + '.start', self._build_message(ctx, payload), ctx)
         result = await self.execute_step(step, workflow_instance, payload, ctx)
         if result.exception:
             await self._handle_failure(result.exception, message, ctx)

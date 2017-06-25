@@ -3,101 +3,66 @@ Inqubo
 
 Inqubo means "process", "series of steps" in zulu.
 
-This is a automated workflow runner / manager
+This is a automated workflow runner / manager.
+The idea is define a workflow as a tree (acyclic graph in the future) consisting of atomic actions.
+These actions are choreographed using RabbitMQ.
+Multiple runners for the same workflow can be started and tasks are automatically balanced.
+Retries are implemented using RabbitMQ dead letter exchange feature.
 
 
 Usage
 ============
 
-## Branching flow
-
 ```python
-import asyncio
+from inqubo.retry_strategies import LimitedRetries, no_retries
 from inqubo.workflow import  Workflow
 from inqubo.decorators import step
-from inqubo.runners.simple_runner import SimpleRunner
 
+# define stome steps
 @step()
 async def get_data():
-    print('geting data..')
-    return ['foo1', 'foo2']
+    return await fetch_some_data()
 
-@step()
+
+# default is 3 retries with 1 second spacing
+@step(retry_strategy=LimitedRetries(number_retries=20, retry_timeout=300))
 def process_data(payload):
-    print('processing data: {}'.format(payload))
-    return ['processed_foo1', 'processed_foo2']
+    return process_the_data(payload)
 
-@step()
+@step(retry_strategy=no_retries)
 async def load_data_to_external_system(payload):
-    await asyncio.sleep(10)
-    print('loaded data to external system: {}'.format(payload))
+    await upload_it(payload)
 
 @step()
-def load_data_to_internal_system(payload):
-    print('loaded data to internal system: {}'.format(payload))
+async def load_data_to_internal_system(payload):
+    await upload_it_somewhere_else(payload)
 
+
+#build the workflow
 flow = Workflow('simple')
 
 flow.start(get_data)\
     .then(process_data)\
     .then(load_data_to_external_system, load_data_to_internal_system) # two tasks in parallel
 
+# start runner
 loop = asyncio.get_event_loop()
-runner = SimpleRunner(flow, loop)
-loop.run_until_complete(runner.trigger('test run'))
-loop.close()
-```
 
-## Retries
+async def main():
+    # ampq client
+    pika_client = PikaClient('amqp://guest:guest@127.0.0.1/', loop)
+    
+    # setup runner for this flow
+    pika_runner = PikaRunner(flow, pika_client, loop)
+    
+    # set up queues & start listening
+    await pika_runner.start()
+    
+    # trigger a run with a unique id
+    await pika_runner.trigger('test_run')
 
-```python
-import asyncio
-import random
+    while True:
+        await asyncio.sleep(100)
 
-from inqubo.retry_strategies import LimitedRetries, no_retries
-from inqubo.workflow import  Workflow
-from inqubo.decorators import step
-from inqubo.runners.simple_runner import SimpleRunner, SimpleRunFailure
-
-
-class RandomFailure(Exception):
-    def __str__(self):
-        return 'random failure'
-
-
-@step()  # default is 3 retries at 1 second timeout
-async def get_data():
-    print('geting data..')
-    if random.random() > 0.5:
-        raise RandomFailure
-    return ['foo1', 'foo2']
-
-
-@step(retry_strategy=LimitedRetries(number_retries=20, retry_timeout=300)) # more attempts for this step
-def process_data(payload):
-    print('processing data')
-    if random.random() > 0.1:
-        raise RandomFailure
-
-
-@step(retry_strategy=no_retries)
-async def load_data(payload):
-    print('loading data')
-    if random.random() > 0.5:
-        raise RandomFailure
-
-flow = Workflow('simple')
-
-flow.start(get_data)\
-    .then(process_data)\
-    .then(load_data) # two tasks in parallel
-
-loop = asyncio.get_event_loop()
-runner = SimpleRunner(flow, event_loop=loop)
-try:
-    loop.run_until_complete(runner.trigger('test run'))
-    print('run successful')
-except SimpleRunFailure as r:
-    print('run failed, errors: {}'.format(r.errors))
-loop.close()
+loop.run_until_complete(main())
 ```
