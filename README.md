@@ -66,3 +66,8 @@ async def main():
 
 loop.run_until_complete(main())
 ```
+
+To start rabbitmq for testing:
+```bash
+docker run --rm --hostname my-rabbit --name some-rabbit -p 5672:5672 -p 15672:15672 rabbitmq:3-management
+```
