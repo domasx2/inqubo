@@ -72,7 +72,7 @@ class PikaRunner(BaseRunner):
     async def _trigger(self, workflow_instance: WorkflowInstance, payload: t.Any):
         ctx = self._ctx(workflow_instance)
         ctx.log.info('triggering workflow!')
-        await self._publish_message(self.workflow.id + '.init', self._build_message(workflow_instance, payload), ctx)
+        await self._publish_message(self.workflow.id + '.init', self._build_message(ctx, payload), ctx)
 
     async def _setup_queue(self, name: str, ctx: Context, routing_keys: t.List[str]=[],
                            on_message: t.Callable[[IncomingMessage], None]=None,
@@ -87,13 +87,13 @@ class PikaRunner(BaseRunner):
             queue.consume(on_message)
         return queue
 
-    def _build_message(self, workflow_instance: WorkflowInstance, payload: t.Any=None) -> Message:
+    def _build_message(self, ctx: Context, payload: t.Any=None) -> Message:
         return Message(
-            bytes(json.dumps({'meta': workflow_instance.meta, 'payload': payload}), 'utf-8'),
+            bytes(json.dumps({'meta': ctx.workflow_instance.meta, 'payload': payload}), 'utf-8'),
             content_type='application/json',
             headers= {
                 'workflow_id': self.workflow.id,
-                'workflow_instance_key': workflow_instance.key
+                'workflow_instance_key': ctx.workflow_instance.key
             }
         )
 
@@ -101,8 +101,8 @@ class PikaRunner(BaseRunner):
         ctx.log.debug('publishing message routing_key [{}]'.format(routing_key))
         await self.exchange.publish(message, routing_key)
 
-    async def _publish_retry(self, step: Step, message: Message, retry_attempt: int, retry_timeout: int, ctx: Context):
-        routing_key = step.name + '.retry'
+    async def _publish_retry(self, message: Message, retry_attempt: int, retry_timeout: int, ctx: Context):
+        routing_key = ctx.step.name + '.retry'
         queue_name = '{}.{}'.format(routing_key, retry_timeout)
         message.headers['retry_attempt'] = retry_attempt
         if queue_name not in self.retry_queues:
@@ -115,15 +115,14 @@ class PikaRunner(BaseRunner):
         ctx.log.debug('publishing to retry queue {}'.format(queue_name))
         await self.retry_exchange.publish(message, queue_name)
 
-    async def _handle_failure(self, step: Step, workflow_instance: WorkflowInstance,
-                              exception: Exception, message: Message, ctx: Context):
+    async def _handle_failure(self, exception: Exception, message: Message, ctx: Context):
         retry_attempt = message.headers.get('retry_attempt', 0) + 1
-        retry_strategy = step.retry_strategy or self.retry_strategy
+        retry_strategy = ctx.step.retry_strategy or self.retry_strategy
         retry_after = retry_strategy.get_retry_timeout(exception, retry_attempt)
         if retry_after:
             ctx.log.warning('failed, queuing retry attempt {} after {}ms'.format(retry_attempt, retry_after))
 
-            await self._publish_retry(step, message, retry_attempt, retry_after, ctx)
+            await self._publish_retry(message, retry_attempt, retry_after, ctx)
             payload = {
                 'fatal': False,
                 'attempts': retry_attempt,
@@ -137,10 +136,10 @@ class PikaRunner(BaseRunner):
                 'retry_after': None,
             }
 
-        await self._publish_message(step.name + '.failure', self._build_message(workflow_instance, payload), ctx)
+        await self._publish_message(ctx.step.name + '.failure', self._build_message(ctx, payload), ctx)
 
-    async def _handle_success(self, step: Step, workflow_instance: WorkflowInstance, payload: t.Any, ctx: Context):
-        await self._publish_message(step.name + '.success', self._build_message(workflow_instance, payload), ctx)
+    async def _handle_success(self, payload: t.Any, ctx: Context):
+        await self._publish_message(ctx.step.name + '.success', self._build_message(ctx, payload), ctx)
 
     async def _handle_message(self, step: Step, message: IncomingMessage):
         body = json.loads(message.body)
@@ -151,7 +150,7 @@ class PikaRunner(BaseRunner):
         payload = body['payload']
         result = await self.execute_step(step, workflow_instance, payload, ctx)
         if result.exception:
-            await self._handle_failure(step, workflow_instance, result.exception, message, ctx)
+            await self._handle_failure(result.exception, message, ctx)
         else:
-            await self._handle_success(step, workflow_instance, result.result, ctx)
+            await self._handle_success(result.result, ctx)
         message.ack()
