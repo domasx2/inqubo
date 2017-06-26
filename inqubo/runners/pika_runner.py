@@ -133,10 +133,6 @@ class PikaRunner(BaseRunner):
         ctx.log.info('publishing event [{}]'.format(routing_key))
         await self.exchange.publish(message, routing_key)
 
-    async def _publish_message(self, routing_key: str, message: Message, ctx: Context):
-        ctx.log.debug('publishing message routing_key [{}]'.format(routing_key))
-        await self.exchange.publish(message, routing_key)
-
     async def _publish_retry(self, message: Message, retry_attempt: int, retry_timeout: int, ctx: Context):
         routing_key = ctx.step.name + '.' + Event.RETRY.value
         queue_name = '{}.{}'.format(routing_key, retry_timeout)
@@ -173,7 +169,6 @@ class PikaRunner(BaseRunner):
             }
 
         await self._publish_event(ctx, Event.FAILURE, payload)
-
 
     async def _handle_message(self, step: Step, message: IncomingMessage):
         with message.process():
