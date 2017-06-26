@@ -84,7 +84,7 @@ class PikaRunner(BaseRunner):
             def on_message(message: IncomingMessage):
                 self.event_loop.create_task(self._handle_message(step, message))
 
-            queue = await self._setup_queue(step.name, ctx, [trigger_key, step.name + '.retry'], on_message)
+            queue = await self._setup_queue(step.name, ctx, [trigger_key, step.name + '.' + Event.RETRY.value], on_message)
             self.step_queues[step.name] = queue
 
             for child in step.children:
@@ -95,7 +95,7 @@ class PikaRunner(BaseRunner):
     async def _trigger(self, workflow_instance: WorkflowInstance, payload: t.Any):
         ctx = self._ctx(workflow_instance)
         ctx.log.info('triggering workflow!')
-        await self.exchange.publish(self._build_event_message(ctx, payload), self.workflow.id + '.init')
+        await self.exchange.publish(self._build_event_message(ctx, payload), self.workflow.id + '.' + Event.INIT.value)
 
     async def _emit_workflow_meta(self, ctx: Context):
         ctx.log.info('emitting workflow meta')
