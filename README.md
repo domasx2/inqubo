@@ -69,12 +69,12 @@ async def main():
     await pika_runner.start()
     
     # trigger a run with a unique id
-    await pika_runner.trigger('test_run')
-
-    while True:
-        await asyncio.sleep(100)
+    await pika_runner.trigger('test_run',
+                              meta={'foo':'bar'},  # provided to every task
+                              payload={'baz': 'bar'})  # send to initial task
 
 loop.run_until_complete(main())
+loop.run_forever()
 ```
 
 To start rabbitmq for testing:

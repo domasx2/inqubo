@@ -2,6 +2,7 @@ import typing as t
 import asyncio
 import logging
 import json
+from enum import Enum
 from aio_pika import connect, Message, ExchangeType, IncomingMessage, Message, Queue, Exchange
 
 from inqubo.retry_strategies import BaseRetryStrategy
@@ -11,6 +12,14 @@ from inqubo.runners.models import WorkflowInstance
 from inqubo.workflow import Workflow, Step
 
 logger = logging.getLogger('inqubo')
+
+
+class Event(Enum):
+    INIT = 'init'
+    SUCCESS = 'success'
+    FAILURE = 'failure'
+    RETRY = 'retry'
+    START = 'start'
 
 
 class PikaRunnerError(Exception):
@@ -60,9 +69,11 @@ class PikaRunner(BaseRunner):
                                                                               durable=True, auto_delete=False)
 
         ctx.log.info('setting up meta')
+
         def on_workflow_request(message: IncomingMessage):
-            ctx.log.info('got workflow meta request')
-            self.event_loop.create_task(self._emit_workflow_meta(ctx))
+            with message.process():
+                ctx.log.info('got workflow meta request')
+                self.event_loop.create_task(self._emit_workflow_meta(ctx))
 
         await self._setup_queue('', ctx, ['workflow_meta_request'], on_workflow_request, self.meta_exchange)
         await self._emit_workflow_meta(ctx)
@@ -77,21 +88,18 @@ class PikaRunner(BaseRunner):
             self.step_queues[step.name] = queue
 
             for child in step.children:
-                await register_step(step.name + '.success', child)
+                await register_step(step.name + '.' + Event.SUCCESS.value, child)
 
-        await register_step(self.workflow.id + '.init', self.workflow.initial_step)
+        await register_step(self.workflow.id + '.' + Event.INIT.value, self.workflow.initial_step)
 
     async def _trigger(self, workflow_instance: WorkflowInstance, payload: t.Any):
         ctx = self._ctx(workflow_instance)
         ctx.log.info('triggering workflow!')
-        await self._publish_message(self.workflow.id + '.init', self._build_message(ctx, payload), ctx)
+        await self.exchange.publish(self._build_event_message(ctx, payload), self.workflow.id + '.init')
 
     async def _emit_workflow_meta(self, ctx: Context):
         ctx.log.info('emitting workflow meta')
-        await self.meta_exchange.publish(Message(
-            bytes(json.dumps(self.workflow.serialize()), 'utf-8'),
-            content_type='application/json',
-        ), 'workflow_meta')
+        await self.meta_exchange.publish(self._build_message(self.workflow.serialize()), 'workflow_meta')
 
     async def _setup_queue(self, name: str, ctx: Context, routing_keys: t.List[str]=[],
                            on_message: t.Callable[[IncomingMessage], None]=None,
@@ -106,22 +114,31 @@ class PikaRunner(BaseRunner):
             queue.consume(on_message)
         return queue
 
-    def _build_message(self, ctx: Context, payload: t.Any=None) -> Message:
+    @staticmethod
+    def _build_message(payload: t.Any={}, headers: t.Dict[str, str]={}) -> Message:
         return Message(
-            bytes(json.dumps({'meta': ctx.workflow_instance.meta, 'payload': payload}), 'utf-8'),
+            bytes(json.dumps(payload), 'utf-8'),
             content_type='application/json',
-            headers= {
-                'workflow_id': self.workflow.id,
-                'workflow_instance_key': ctx.workflow_instance.key
-            }
+            headers=headers
         )
+
+    def _build_event_message(self, ctx:Context, payload: t.Any=None):
+        return self._build_message(
+            { 'meta': ctx.workflow_instance.meta, 'payload': payload},
+            { 'workflow_id': self.workflow.id, 'workflow_instance_key': ctx.workflow_instance.key }
+        )
+    async def _publish_event(self, ctx: Context, event: Event, payload: t.Any=None):
+        message = self._build_event_message(ctx, payload)
+        routing_key = '{}.{}'.format(ctx.step.name, event.value)
+        ctx.log.info('publishing event [{}]'.format(routing_key))
+        await self.exchange.publish(message, routing_key)
 
     async def _publish_message(self, routing_key: str, message: Message, ctx: Context):
         ctx.log.debug('publishing message routing_key [{}]'.format(routing_key))
         await self.exchange.publish(message, routing_key)
 
     async def _publish_retry(self, message: Message, retry_attempt: int, retry_timeout: int, ctx: Context):
-        routing_key = ctx.step.name + '.retry'
+        routing_key = ctx.step.name + '.' + Event.RETRY.value
         queue_name = '{}.{}'.format(routing_key, retry_timeout)
         message.headers['retry_attempt'] = retry_attempt
         if queue_name not in self.retry_queues:
@@ -155,22 +172,20 @@ class PikaRunner(BaseRunner):
                 'retry_after': None,
             }
 
-        await self._publish_message(ctx.step.name + '.failure', self._build_message(ctx, payload), ctx)
+        await self._publish_event(ctx, Event.FAILURE, payload)
 
-    async def _handle_success(self, payload: t.Any, ctx: Context):
-        await self._publish_message(ctx.step.name + '.success', self._build_message(ctx, payload), ctx)
 
     async def _handle_message(self, step: Step, message: IncomingMessage):
-        body = json.loads(message.body)
-        workflow_instance = WorkflowInstance(id=message.headers['workflow_id'],
-                                             key = message.headers['workflow_instance_key'],
-                                             meta = body['meta'])
-        ctx = self._ctx(workflow_instance, step)
-        payload = body['payload']
-        await self._publish_message(step.name + '.start', self._build_message(ctx, payload), ctx)
-        result = await self.execute_step(step, workflow_instance, payload, ctx)
-        if result.exception:
-            await self._handle_failure(result.exception, message, ctx)
-        else:
-            await self._handle_success(result.result, ctx)
-        message.ack()
+        with message.process():
+            body = json.loads(message.body)
+            workflow_instance = WorkflowInstance(id=message.headers['workflow_id'],
+                                                 key = message.headers['workflow_instance_key'],
+                                                 meta = body['meta'])
+            ctx = self._ctx(workflow_instance, step)
+            payload = body['payload']
+            await self._publish_event(ctx, Event.START, payload)
+            result = await self.execute_step(step, workflow_instance, payload, ctx)
+            if result.exception:
+                await self._handle_failure(result.exception, message, ctx)
+            else:
+                await self._publish_event(ctx, Event.SUCCESS, result.result)

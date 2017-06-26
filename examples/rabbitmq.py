@@ -61,10 +61,6 @@ async def main():
     await pika_runner.start()
     await pika_runner.trigger('test_run_{}'.format(random.randint(0, 100000)))
 
-    while True:
-        await asyncio.sleep(100)
 
-try:
-    loop.run_until_complete(main())
-except KeyboardInterrupt:
-        print('bye')
+loop.run_until_complete(main())
+loop.run_forever()
