@@ -2,8 +2,9 @@ import typing as t
 import asyncio
 import logging
 import json
+from datetime import datetime
 from enum import Enum
-from aio_pika import connect, Message, ExchangeType, IncomingMessage, Message, Queue, Exchange
+from aio_pika import connect, Message, ExchangeType, IncomingMessage, Message, Queue, Exchange, DeliveryMode
 
 from inqubo.retry_strategies import BaseRetryStrategy
 from inqubo.runners.base_runner import BaseRunner
@@ -99,7 +100,7 @@ class PikaRunner(BaseRunner):
 
     async def _emit_workflow_meta(self, ctx: Context):
         ctx.log.info('emitting workflow meta')
-        await self.meta_exchange.publish(self._build_message(self.workflow.serialize()), 'workflow_meta')
+        await self.meta_exchange.publish(self._build_message(self.workflow.serialize(), persistent=False), 'workflow_meta')
 
     async def _setup_queue(self, name: str, ctx: Context, routing_keys: t.List[str]=[],
                            on_message: t.Callable[[IncomingMessage], None]=None,
@@ -115,9 +116,11 @@ class PikaRunner(BaseRunner):
         return queue
 
     @staticmethod
-    def _build_message(payload: t.Any={}, headers: t.Dict[str, str]={}) -> Message:
+    def _build_message(payload: t.Any={}, headers: t.Dict[str, str]={}, persistent=True) -> Message:
         return Message(
             bytes(json.dumps(payload), 'utf-8'),
+            delivery_mode=DeliveryMode.PERSISTENT if persistent else DeliveryMode.NOT_PERSISTENT,
+            timestamp=datetime.utcnow().timestamp(),
             content_type='application/json',
             headers=headers
         )

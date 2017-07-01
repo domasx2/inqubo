@@ -2,6 +2,7 @@ import asyncio
 import logging
 import random
 
+from inqubo.retry_strategies import LimitedRetries
 from inqubo.workflow import  Workflow
 from inqubo.decorators import step
 from inqubo.runners.pika_runner import PikaRunner, PikaClient
@@ -57,7 +58,7 @@ loop = asyncio.get_event_loop()
 
 async def main():
     pika_client = PikaClient('amqp://guest:guest@127.0.0.1/', loop)
-    pika_runner = PikaRunner(flow, pika_client, loop)
+    pika_runner = PikaRunner(flow, pika_client, loop, retry_strategy=LimitedRetries(20, 3000))
     await pika_runner.start()
     await pika_runner.trigger('test_run_{}'.format(random.randint(0, 100000)))
 
