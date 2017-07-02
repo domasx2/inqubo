@@ -38,6 +38,8 @@ class Step:
     def then(self, *steps: t.List[StepOrFn]) -> t.Union[None, 'Step']:
         for step in steps:
             step = self._make(step)
+            while step.parent:
+                step = step.parent
             step.parent = self
             self.children.append(step)
         if len(steps) == 1:

@@ -2,6 +2,7 @@ import inspect
 import logging
 import time
 import typing as t
+import traceback
 
 from inqubo.retry_strategies import BaseRetryStrategy, LimitedRetries
 from inqubo.runners.context import Context
@@ -47,7 +48,7 @@ class BaseRunner:
 
         except Exception as e:
             ctx.log.error('failed with {}'.format(e))
-            return StepResult(duration=start - time.time(), exception=e)
+            return StepResult(duration=start - time.time(), exception=e, traceback=traceback.format_exc())
 
 
 

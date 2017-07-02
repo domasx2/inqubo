@@ -150,7 +150,7 @@ class PikaRunner(BaseRunner):
         ctx.log.debug('publishing to retry queue {}'.format(queue_name))
         await self.retry_exchange.publish(message, queue_name)
 
-    async def _handle_failure(self, exception: Exception, message: Message, ctx: Context):
+    async def _handle_failure(self, exception: Exception, traceback: t.Any, message: Message, ctx: Context):
         retry_attempt = message.headers.get('retry_attempt', 0) + 1
         retry_strategy = ctx.step.retry_strategy or self.retry_strategy
         retry_after = retry_strategy.get_retry_timeout(exception, retry_attempt)
@@ -170,6 +170,9 @@ class PikaRunner(BaseRunner):
                 'attempts': retry_attempt,
                 'retry_after': None,
             }
+        payload['exception'] = type(exception).__name__
+        payload['traceback'] = traceback
+
 
         await self._publish_event(ctx, Event.FAILURE, payload)
 
@@ -184,6 +187,6 @@ class PikaRunner(BaseRunner):
             await self._publish_event(ctx, Event.START, payload)
             result = await self.execute_step(step, workflow_instance, payload, ctx)
             if result.exception:
-                await self._handle_failure(result.exception, message, ctx)
+                await self._handle_failure(result.exception, result.traceback, message, ctx)
             else:
                 await self._publish_event(ctx, Event.SUCCESS, result.result)

@@ -14,3 +14,4 @@ class StepResult(t.NamedTuple):
     duration: int
     result: t.Any=None
     exception: Exception=None
+    traceback: t.Any=None
