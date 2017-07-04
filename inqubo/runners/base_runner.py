@@ -37,6 +37,8 @@ class BaseRunner:
             kwargs['workflow_instance'] = workflow_instance
         if 'payload' in args:
             kwargs['payload'] = payload
+        if 'meta' in args:
+            kwargs['meta'] = workflow_instance.meta
         start = time.time()
         try:
             if inspect.iscoroutinefunction(step.fn):
