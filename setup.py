@@ -7,6 +7,6 @@ setup(name='Inqubo',
       description='Workflow Engine',
       author='Domas Lapinskas',
       author_email='Domas Lapinskas',
-      packages=['inqubo'],
+      packages=['inqubo', 'inqubo.runners'],
       install_requires=['aio-pika==0.12.1'],
      )
