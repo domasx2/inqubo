@@ -5,8 +5,8 @@ Inqubo means "process", "series of steps" in zulu.
 
 
 This is a automated workflow runner / manager.  
-The goal was to combine the best features of workflow orchestration & choreography.  
-Workflows are defined as a tree of atomic tasks. They are internally choreographed using RabbitMQ.
+The goal was to combine the best features of workflow orchestration & choreography.
+Workflows are explicitly defined in code as a tree of atomic tasks. Inqubo automatically choreographs them using RabbitMQ. Tasks are triggered by "success" events from preceeding tasks and themselves emit lifecycle events.
 
 Features
 ===========
@@ -94,3 +94,7 @@ Demo
 ==============
 A demo that can be run with docker-compose, include monitoring app and sample workflows:  
 https://github.com/domasx2/inqubo-demo
+
+How it works
+===============
+![chart](https://raw.githubusercontent.com/domasx2/inqubo/images/inqubo.png)
